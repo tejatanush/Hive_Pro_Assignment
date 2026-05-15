@@ -22,6 +22,17 @@ from cyber_risk.datasets.uploads import (  # noqa: E402
 from cyber_risk.datasets.loaders import csv_row_counts_for_pack  # noqa: E402
 from cyber_risk.graph.workflow import run_langgraph_analysis  # noqa: E402
 
+# Deployed FastAPI service (Render). Change here when the backend URL changes — no .env / Secrets.
+BACKEND_API_BASE_URL = "https://hive-pro-assignment.onrender.com".rstrip("/")
+
+
+def backend_health_url() -> str:
+    return f"{BACKEND_API_BASE_URL}/health"
+
+
+def backend_openapi_url() -> str:
+    return f"{BACKEND_API_BASE_URL}/docs"
+
 
 def _default_top_k(cfg: dict) -> int:
     try:
@@ -65,6 +76,11 @@ def main() -> None:
 
     with st.sidebar:
         st.header("Analysis options")
+        st.caption("**Backend API** (in code: `BACKEND_API_BASE_URL`)")
+        st.code(BACKEND_API_BASE_URL, language="text")
+        st.markdown(
+            f"[Health]({backend_health_url()}) · [`/docs`]({backend_openapi_url()})"
+        )
         use_bundled = st.checkbox(
             "Use bundled `data/` directory (demo)",
             value=False,

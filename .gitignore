@@ -12,6 +12,7 @@ ENV/
 
 # Local env + secrets
 .env
+.streamlit/secrets.toml
 
 # Generated artifacts (safe to regenerate)
 data/processed/*.json
