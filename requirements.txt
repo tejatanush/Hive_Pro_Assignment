@@ -15,5 +15,5 @@ langgraph>=0.2
 sentence-transformers>=2.6
 numpy>=1.26
 # Optional: uncomment for Pinecone + Groq
-# pinecone[grpc]>=5.0
-# langchain-groq>=0.1
+pinecone[grpc]>=5.0
+langchain-groq>=0.1
