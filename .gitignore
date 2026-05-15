@@ -1,0 +1,29 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Local env + secrets
+.env
+
+# Generated artifacts (safe to regenerate)
+data/processed/*.json
+data/processed/*.npz
+!data/processed/.gitkeep
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Model caches (sentence-transformers / huggingface)
+.cache/
+models/

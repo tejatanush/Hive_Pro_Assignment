@@ -1,0 +1,144 @@
+Metadata-Version: 2.4
+Name: tawasol-risk
+Version: 0.1.0
+Summary: AI-assisted cyber risk prioritization for TawasolPay (assignment scaffold)
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.110
+Requires-Dist: uvicorn[standard]>=0.27
+Requires-Dist: streamlit>=1.32
+Requires-Dist: pandas>=2.2
+Requires-Dist: pydantic>=2.6
+Requires-Dist: pydantic-settings>=2.2
+Requires-Dist: httpx>=0.27
+Requires-Dist: python-dotenv>=1.0
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: langchain-core>=0.2
+Requires-Dist: langchain-community>=0.2
+Requires-Dist: langgraph>=0.2
+Requires-Dist: sentence-transformers>=2.6
+Requires-Dist: numpy>=1.26
+Provides-Extra: pinecone
+Requires-Dist: pinecone[grpc]>=5.0; extra == "pinecone"
+Provides-Extra: groq
+Requires-Dist: langchain-groq>=0.1; extra == "groq"
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: ruff>=0.4; extra == "dev"
+
+# TawasolPay — AI-assisted cyber risk analysis system
+
+End-to-end scaffold for the **AI-Powered Cyber Risk Assistant** take-home (`AI_Cyber_Risk_Assignment.docx`). It ingests the synthetic TawasolPay data pack, cross-checks **CISA KEV**, joins **threat intelligence**, ranks **top 5** risks using a **non–CVSS-only** composite model, and retrieves **NIST SP 800-53 Rev. 5** control prose via **embeddings** (Pinecone **or** a local on-disk vector index).
+
+## What you get
+
+- **Structured analytics path**: CSVs + synthetic MDR note are treated as authoritative tabular facts (joins, filters, deterministic scoring).
+- **RAG path**: Official NIST OSCAL catalog JSON is downloaded, parsed into control-level chunks, embedded, and queried semantically with lightweight control-family gating (SI / RA / IR / AC / SA / SC / CM).
+- **Serving**:
+  - `FastAPI` JSON + Markdown endpoints
+  - `Streamlit` UI for the human-readable briefing
+- **Orchestration**: `LangGraph` linear pipeline (`load → index → rank → NIST attach → render`).
+
+## Repository layout
+
+```text
+api/                      # FastAPI entrypoint (uvicorn)
+configs/default.yaml      # Tunables (top_k, default NIST prefixes, URLs)
+data/                     # Assignment pack (CSVs + synthetic_threat_report.md)
+data/processed/           # Generated: KEV JSON, NIST JSON, vector index (gitignored)
+scripts/                  # One-shot bootstrap utilities
+src/tawasol_risk/         # Core library
+streamlit_app/            # Streamlit UI
+tests/                    # pytest
+```
+
+## Quickstart (local)
+
+### 1) Create a virtualenv and install
+
+```powershell
+cd c:\Users\tejat\Desktop\Hiver
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -U pip
+pip install -e ".[dev]"
+```
+
+Optional Pinecone upsert path:
+
+```powershell
+pip install -e ".[dev,pinecone]"
+copy .env.example .env
+# fill PINECONE_* and run ingest with --pinecone (see scripts section)
+```
+
+### 2) Download CISA KEV + build the NIST vector index
+
+```powershell
+python scripts\download_kev.py
+python scripts\ingest_nist_vectors.py
+```
+
+The first ingest downloads the official **NIST SP 800-53 Rev. 5** OSCAL JSON (same content family linked from NIST CSRC) and writes:
+
+- `data/processed/kev_catalog.json`
+- `data/processed/nist_sp800_53_rev5_catalog.json`
+- `data/processed/nist_local_vectors.npz` + `nist_local_vectors.meta.json` (default local mode)
+
+### 3) Run API + UI
+
+```powershell
+# API
+uvicorn api.main:app --reload --port 8000
+
+# UI (separate terminal)
+streamlit run streamlit_app\app.py
+```
+
+Smoke the API:
+
+- `GET http://127.0.0.1:8000/health`
+- `POST http://127.0.0.1:8000/v1/risk-report`
+- `GET http://127.0.0.1:8000/v1/risk-report.md`
+
+## Pinecone mode (optional)
+
+If `PINECONE_API_KEY` and `PINECONE_INDEX_NAME` are set, runtime retrieval prefers Pinecone; otherwise it uses the **local** index produced by `scripts/ingest_nist_vectors.py`.
+
+Upsert (serverless index auto-created when possible):
+
+```powershell
+python scripts\ingest_nist_vectors.py --pinecone
+```
+
+## Docker (optional)
+
+```powershell
+docker compose up --build
+```
+
+Notes:
+
+- The container image installs Python deps; you still need generated artifacts under `data/processed/` for first-class NIST excerpts (mount a host volume or run ingest inside the container on startup).
+
+## Supporting answer 1 — embed vs structured split
+
+**Embedded data:** the **NIST SP 800-53 Rev. 5 control catalog prose** (OSCAL JSON downloaded from the official NIST content distribution on GitHub) is chunked per control, embedded, and retrieved by semantic similarity. This matches the assignment intent: long-form authoritative remediation text is not feasible to hardcode and should be grounded via RAG.
+
+**Structured queries:** the **asset inventory, vulnerability rows, threat intel feed, business service registry, and CISA KEV crosswalk** stay in deterministic joins and scoring. These are relatively low-dimensional relational facts where embeddings add little signal but hallucination risk is high; SQL-like joins keep evidence auditable.
+
+## Supporting answer 2 — three concrete failure modes (and mitigations)
+
+1. **KEV false negatives:** if a CVE is not present in the downloaded KEV snapshot (stale cache, feed delay, or non-listed synthetic CVE), the model will not get the KEV ransomware multiplier even if exploitation is real. Mitigation: version the KEV file by `dateReleased`, refresh on a schedule, and surface `on_kev: false` prominently as “unknown in KEV”, not “safe”.
+
+2. **NIST retrieval mismatch:** semantic search can return a plausible but **wrong** control for an unusual edge case, especially when multiple controls overlap (e.g., logging vs monitoring). Mitigation: constrain candidates by control family heuristics (already done), show the retrieved **control id + excerpt**, and add an evaluator that checks keyword overlap with the vulnerability class.
+
+3. **Intel join brittleness:** threat intel is joined primarily by **exact CVE / token match** on `matched_cve_or_control`. Typos, alternate aliases, or campaign-level IOCs without CVE linkage will not attach. Mitigation: add a second-stage matcher (vendor/product/version windows) and mark “no TI match” explicitly in the narrative.
+
+## Supporting answer 3 — one improvement with another day
+
+I would add a **calibrated evaluation harness** with frozen golden inputs: expected ordering constraints (synthetic scenarios like “internal CVSS 10 < internet CVSS 8 with KEV+TI”), regression tests for KEV parsing fields, and a small human-labeled set for NIST retrieval precision. That turns the prioritisation and RAG layers from “reasonable defaults” into a measurable, iteratively improvable system.
+
+## Security / compliance note
+
+All provided datasets and the MDR note are **synthetic** (see `data/synthetic_threat_report.md`). Do not use this output for real-world operational decisions without independent validation.

@@ -1,0 +1,29 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data:ro
+      - tawasol_processed:/app/data/processed
+    environment:
+      - TAWASOL_PROJECT_ROOT=/app
+
+  streamlit:
+    image: python:3.11-slim
+    working_dir: /app
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./:/app
+      - tawasol_processed:/app/data/processed
+    environment:
+      - TAWASOL_PROJECT_ROOT=/app
+    command: >
+      bash -lc "pip install -U pip &&
+      pip install -r requirements.txt &&
+      pip install -e . &&
+      streamlit run streamlit_app/app.py --server.address 0.0.0.0 --server.port 8501"
+
+volumes:
+  tawasol_processed:

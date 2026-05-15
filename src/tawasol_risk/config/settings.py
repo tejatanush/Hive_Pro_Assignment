@@ -1,0 +1,109 @@
+from __future__ import annotations
+
+import os
+from functools import lru_cache
+from pathlib import Path
+from typing import Any
+
+import yaml
+from pydantic import AliasChoices, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _default_project_root() -> Path:
+    env = os.getenv("TAWASOL_PROJECT_ROOT")
+    if env:
+        return Path(env).resolve()
+    # src/tawasol_risk/config/settings.py -> parents[3] = repo root
+    return Path(__file__).resolve().parents[3]
+
+
+def _load_yaml_config(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    with path.open("r", encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
+
+
+class Settings(BaseSettings):
+    """Runtime configuration (env + optional YAML overlay)."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="TAWASOL_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    project_root: Path = Field(default_factory=_default_project_root)
+    data_dir: Path = Field(default=Path("data"))
+    processed_dir: Path = Field(default=Path("data/processed"))
+    config_path: Path = Field(default=Path("configs/default.yaml"))
+
+    kev_cache_filename: str = "kev_catalog.json"
+    nist_catalog_filename: str = "nist_sp800_53_rev5_catalog.json"
+    local_vector_index_filename: str = "nist_local_vectors.npz"
+    local_vector_meta_filename: str = "nist_local_vectors.meta.json"
+
+    pinecone_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("PINECONE_API_KEY", "TAWASOL_PINECONE_API_KEY"),
+    )
+    pinecone_index_name: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("PINECONE_INDEX_NAME", "TAWASOL_PINECONE_INDEX_NAME"),
+    )
+    pinecone_cloud: str = Field(
+        default="aws",
+        validation_alias=AliasChoices("PINECONE_CLOUD", "TAWASOL_PINECONE_CLOUD"),
+    )
+    pinecone_region: str = Field(
+        default="us-east-1",
+        validation_alias=AliasChoices("PINECONE_REGION", "TAWASOL_PINECONE_REGION"),
+    )
+
+    llm_provider: str = Field(
+        default="none",
+        validation_alias=AliasChoices("LLM_PROVIDER", "TAWASOL_LLM_PROVIDER"),
+    )
+    openai_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("OPENAI_API_KEY", "TAWASOL_OPENAI_API_KEY"),
+    )
+    openai_base_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("OPENAI_BASE_URL", "TAWASOL_OPENAI_BASE_URL"),
+    )
+    openai_model: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("OPENAI_MODEL", "TAWASOL_OPENAI_MODEL"),
+    )
+
+    embedding_model: str = Field(
+        default="sentence-transformers/all-MiniLM-L6-v2",
+        validation_alias=AliasChoices("EMBEDDING_MODEL", "TAWASOL_EMBEDDING_MODEL"),
+    )
+
+    def resolved_data_dir(self) -> Path:
+        p = self.data_dir if self.data_dir.is_absolute() else self.project_root / self.data_dir
+        return p.resolve()
+
+    def resolved_processed_dir(self) -> Path:
+        p = (
+            self.processed_dir
+            if self.processed_dir.is_absolute()
+            else self.project_root / self.processed_dir
+        )
+        p.mkdir(parents=True, exist_ok=True)
+        return p.resolve()
+
+    def yaml_overlay(self) -> dict[str, Any]:
+        cfg_path = (
+            self.config_path if self.config_path.is_absolute() else self.project_root / self.config_path
+        )
+        return _load_yaml_config(cfg_path)
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
