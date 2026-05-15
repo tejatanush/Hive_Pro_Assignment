@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any, TypedDict, cast
 
 from langgraph.graph import END, StateGraph
@@ -10,18 +11,26 @@ from cyber_risk.datasets.loaders import DataPack, load_data_pack
 from cyber_risk.datasets.schemas import RiskRecord
 from cyber_risk.rag.nist_retriever import excerpt, retrieve_nist_control
 from cyber_risk.rag.vector_store import VectorIndex, load_vector_index
-from cyber_risk.llm.groq_service import groq_api_key, polish_briefing_markdown
+from cyber_risk.llm.groq_service import (
+    groq_api_key,
+    markdown_risk_sections_count,
+    polish_briefing_markdown,
+)
 from cyber_risk.reporting.formatter import render_markdown_report
 from cyber_risk.risk_engine.correlator import build_ranked_risks, risks_to_records
 from cyber_risk.risk_engine.kev_service import KevCatalog, load_kev_catalog
 
 logger = logging.getLogger(__name__)
 
+# Large briefings often hit Groq 413 or get over-compressed by the editor model.
+_GROQ_POLISH_MAX_CHARS = 28_000
+
 
 class AnalysisState(TypedDict, total=False):
     settings: Settings
     yaml_cfg: dict[str, Any]
     top_k: int
+    data_pack_dir: str | None
     pack: DataPack
     kev: KevCatalog
     index: VectorIndex
@@ -35,7 +44,9 @@ def _settings(state: AnalysisState) -> Settings:
 
 def node_load_pack(state: AnalysisState) -> AnalysisState:
     s = _settings(state)
-    pack = load_data_pack(s)
+    dp = state.get("data_pack_dir")
+    dir_path = Path(dp) if dp else None
+    pack = load_data_pack(s, data_pack_dir=dir_path)
     kev = load_kev_catalog(s)
     yaml_cfg = s.yaml_overlay()
     return {"pack": pack, "kev": kev, "yaml_cfg": yaml_cfg}
@@ -105,8 +116,27 @@ def node_groq_polish(state: AnalysisState) -> AnalysisState:
     if not groq_api_key(s):
         logger.warning("LLM_PROVIDER=groq but GROQ_API_KEY (or OPENAI_API_KEY) is unset; skipping polish")
         return {}
+    md_in = state["markdown"]
+    n_expect = len(state.get("records") or [])
+    markers_in = markdown_risk_sections_count(md_in)
+    if markers_in != n_expect:
+        logger.warning(
+            "CVE marker lines (%s) != risk records (%s); polish validation uses record count only",
+            markers_in,
+            n_expect,
+        )
+    if len(md_in) > _GROQ_POLISH_MAX_CHARS:
+        logger.info("Briefing too long (%s chars); skipping Groq polish to avoid truncation/413", len(md_in))
+        return {}
     try:
-        polished = polish_briefing_markdown(state["markdown"], s)
+        polished = polish_briefing_markdown(md_in, s, expected_risk_sections=max(n_expect, 0))
+        if n_expect > 0 and markdown_risk_sections_count(polished) < n_expect:
+            logger.warning(
+                "Groq omitted risk sections (%s < %s); keeping deterministic markdown",
+                markdown_risk_sections_count(polished),
+                n_expect,
+            )
+            return {}
         return {"markdown": polished}
     except Exception as e:
         logger.warning("Groq polish failed; returning deterministic markdown. %s", e)
@@ -132,11 +162,18 @@ def build_analysis_graph() -> StateGraph:
     return g
 
 
-def run_langgraph_analysis(settings: Settings | None = None, *, top_k: int | None = None) -> AnalysisState:
+def run_langgraph_analysis(
+    settings: Settings | None = None,
+    *,
+    top_k: int | None = None,
+    data_pack_dir: Path | str | None = None,
+) -> AnalysisState:
     graph = build_analysis_graph().compile()
     seed: AnalysisState = {}
     if settings is not None:
         seed["settings"] = settings
     if top_k is not None:
         seed["top_k"] = int(top_k)
+    if data_pack_dir is not None:
+        seed["data_pack_dir"] = str(Path(data_pack_dir).resolve())
     return graph.invoke(seed)

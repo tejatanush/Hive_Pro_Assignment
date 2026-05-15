@@ -104,6 +104,24 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("EMBEDDING_MODEL", "CYBER_RISK_EMBEDDING_MODEL"),
     )
 
+    #: When ``False``, NIST RAG **must** use Pinecone—no ``data/processed/*.npz`` fallback (recommended for production).
+    allow_local_vector_fallback: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "ALLOW_LOCAL_VECTOR_FALLBACK",
+            "CYBER_RISK_ALLOW_LOCAL_VECTOR_FALLBACK",
+        ),
+    )
+
+    #: Skip checking that CSVs exist under ``data/`` before ``/ready`` (e.g. backend only accepts uploads).
+    ignore_data_pack_for_ready_check: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "IGNORE_DATA_PACK_READY",
+            "CYBER_RISK_IGNORE_DATA_PACK_READY",
+        ),
+    )
+
     def resolved_data_dir(self) -> Path:
         p = self.data_dir if self.data_dir.is_absolute() else self.project_root / self.data_dir
         return p.resolve()
@@ -145,6 +163,10 @@ class Settings(BaseSettings):
 
     def uses_pinecone(self) -> bool:
         return bool(self.pinecone_api_key and self.pinecone_index_name)
+
+    def nist_rag_requires_pinecone(self) -> bool:
+        """If true, vector queries must go to Pinecone (no local npz index)."""
+        return not self.allow_local_vector_fallback
 
 
 @lru_cache

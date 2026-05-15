@@ -127,11 +127,22 @@ class PineconeIndex:
 
 def load_vector_index(settings: Settings | None = None) -> VectorIndex:
     s = settings or get_settings()
+
+    if s.nist_rag_requires_pinecone():
+        if not s.pinecone_api_key or not s.pinecone_index_name:
+            raise RuntimeError(
+                "NIST RAG is configured for Pinecone only (ALLOW_LOCAL_VECTOR_FALLBACK=false): "
+                "set PINECONE_API_KEY and PINECONE_INDEX_NAME. "
+                "Populate the index via `python scripts/bootstrap.py --pinecone`."
+            )
+        return PineconeIndex(s.pinecone_api_key, s.pinecone_index_name, s.embedding_model)
+
     if s.pinecone_api_key and s.pinecone_index_name:
         try:
             return PineconeIndex(s.pinecone_api_key, s.pinecone_index_name, s.embedding_model)
         except Exception as e:  # pragma: no cover
             logger.warning("Pinecone unavailable (%s); falling back to local index", e)
+            return LocalNumpyIndex.load(s)
     return LocalNumpyIndex.load(s)
 
 

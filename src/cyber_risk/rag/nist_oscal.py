@@ -19,6 +19,13 @@ DEFAULT_NIST_URL = (
 )
 
 
+def resolve_nist_catalog_url(settings: Settings | None = None) -> str:
+    s = settings or get_settings()
+    url = (s.yaml_overlay().get("risk_engine") or {}).get("nist_catalog_url")
+    u = (url or "").strip()
+    return u or DEFAULT_NIST_URL
+
+
 @dataclass
 class NistControlChunk:
     control_id: str
@@ -93,7 +100,7 @@ def nist_catalog_cache_path(settings: Settings | None = None) -> Path:
 
 
 def download_nist_catalog(
-    url: str = DEFAULT_NIST_URL,
+    url: str | None = None,
     settings: Settings | None = None,
     force: bool = False,
 ) -> Path:
@@ -101,9 +108,10 @@ def download_nist_catalog(
     path = nist_catalog_cache_path(s)
     if path.exists() and not force:
         return path
-    logger.info("Downloading NIST SP 800-53 Rev.5 OSCAL catalog from %s", url)
+    resolved_url = (url or "").strip() or resolve_nist_catalog_url(s)
+    logger.info("Downloading NIST SP 800-53 Rev.5 OSCAL catalog from %s", resolved_url)
     with httpx.Client(timeout=300.0) as client:
-        r = client.get(url)
+        r = client.get(resolved_url)
         r.raise_for_status()
         path.write_bytes(r.content)
     return path

@@ -1,5 +1,6 @@
 # Core runtime (matches pyproject.toml base set)
 fastapi>=0.110
+python-multipart>=0.0.9
 uvicorn[standard]>=0.27
 streamlit>=1.32
 pandas>=2.2

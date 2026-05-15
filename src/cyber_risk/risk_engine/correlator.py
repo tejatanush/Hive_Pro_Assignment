@@ -16,12 +16,27 @@ from cyber_risk.risk_engine.kev_service import KevCatalog, kev_to_public_dict, l
 from cyber_risk.risk_engine.scoring import composite_risk_score, match_threat_intel, pick_remediation_hint
 
 
+def _norm(s: str | None) -> str:
+    return (s or "").strip()
+
+
 def _asset_index(assets: list[AssetRow]) -> dict[str, AssetRow]:
-    return {a.asset_id: a for a in assets}
+    # Strip IDs so uploads with accidental whitespace still join vulns → assets.
+    out: dict[str, AssetRow] = {}
+    for a in assets:
+        aid = _norm(a.asset_id)
+        if aid:
+            out[aid] = a
+    return out
 
 
 def _service_index(services: list[BusinessServiceRow]) -> dict[str, BusinessServiceRow]:
-    return {s.business_service: s for s in services}
+    out: dict[str, BusinessServiceRow] = {}
+    for svc in services:
+        k = _norm(svc.business_service)
+        if k:
+            out[k] = svc
+    return out
 
 
 def _rationale_sentence(
@@ -78,7 +93,7 @@ def build_ranked_risks(
     services = _service_index(pack.business_services)
     intel_by_cve: dict[str, list] = defaultdict(list)
     for row in pack.threat_intel:
-        intel_by_cve[(row.matched_cve_or_control or "").strip().upper()].append(row)
+        intel_by_cve[_norm(row.matched_cve_or_control).upper()].append(row)
 
     ranked: list[
         tuple[
@@ -93,13 +108,13 @@ def build_ranked_risks(
         ]
     ] = []
     for vuln in pack.vulnerabilities:
-        if (vuln.status or "").lower() not in {"", "open"}:
+        if _norm(vuln.status).lower() not in {"", "open"}:
             continue
-        asset = assets.get(vuln.asset_id)
+        asset = assets.get(_norm(vuln.asset_id))
         if asset is None:
             continue
-        svc = services.get(asset.business_service)
-        intel = intel_by_cve.get((vuln.cve or "").strip().upper(), [])
+        svc = services.get(_norm(asset.business_service))
+        intel = intel_by_cve.get(_norm(vuln.cve).upper(), [])
         ke_row = kev.lookup(vuln.cve)
         score, breakdown = composite_risk_score(vuln, asset, svc, intel, ke_row)
         hint = pick_remediation_hint(vuln, pack.remediation_hints)

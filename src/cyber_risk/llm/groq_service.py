@@ -54,21 +54,42 @@ def _chat_completion(
     return content.strip()
 
 
-def polish_briefing_markdown(markdown: str, settings: Settings) -> str:
+def markdown_risk_sections_count(markdown: str) -> int:
+    """Count per-risk blocks in formatter output (stable marker)."""
+    return markdown.count("- **CVE / finding:**")
+
+
+def polish_briefing_markdown(
+    markdown: str,
+    settings: Settings,
+    *,
+    expected_risk_sections: int | None = None,
+) -> str:
     """
     Improve readability and tone only. Facts (CVEs, asset IDs, scores) must remain unchanged.
+    When ``expected_risk_sections`` is set, instructions require that many retained risk blocks.
     """
     key = groq_api_key(settings)
     if not key:
         raise ValueError("Groq API key missing (set GROQ_API_KEY or OPENAI_API_KEY)")
 
     model = groq_model_name(settings)
+    n_txt = ""
+    if expected_risk_sections is not None and expected_risk_sections > 0:
+        n_txt = (
+            f" The briefing contains exactly {expected_risk_sections} prioritised risks. "
+            f"You MUST keep all {expected_risk_sections} risk subsections (each introduced by a `###` heading). "
+            "Do not merge, summarise away, or drop any risk — no shrinking to fewer items. "
+            "Preserve every line that starts with `- **CVE / finding:**` (there must be "
+            f"{expected_risk_sections} such lines). "
+        )
     system = (
         "You are an editor for cybersecurity executive briefings. "
         "Rewrite the user's Markdown for clarity, brevity, and professional tone. "
         "CRITICAL: Do not add, remove, or change any factual data — CVE IDs, CVSS numbers, "
         "asset names/IDs, composite scores, control IDs (e.g. SI-2), dates, or quoted NIST excerpts. "
         "Keep heading structure (##, ###) and code fences. Output Markdown only, no preamble."
+        + n_txt
     )
     user = f"Edit this briefing:\n\n{markdown}"
     return _chat_completion(key, model, [{"role": "system", "content": system}, {"role": "user", "content": user}])
