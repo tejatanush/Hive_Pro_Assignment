@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tawasol-risk"
-version = "0.1.0"
-description = "AI-assisted cyber risk prioritization for TawasolPay (assignment scaffold)"
+name = "cyber-risk-assistant"
+version = "1.0.0"
+description = "Production cyber risk prioritization API with NIST RAG and threat intelligence correlation"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

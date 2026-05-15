@@ -1,7 +1,6 @@
 risk_engine:
   top_k: 5
   embedding_model: sentence-transformers/all-MiniLM-L6-v2
-  # Candidate NIST SP 800-53 Rev. 5 controls for retrieval filtering (baseline set)
   default_control_prefixes:
     - SI-2
     - RA-5
@@ -14,5 +13,5 @@ risk_engine:
   nist_catalog_url: https://raw.githubusercontent.com/usnistgov/oscal-content/main/nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog.json
 
 api:
-  title: TawasolPay Cyber Risk API
-  version: 0.1.0
+  title: Cyber Risk API
+  version: "1.0.0"

@@ -9,9 +9,9 @@ _ROOT = Path(__file__).resolve().parents[1]
 _SRC = _ROOT / "src"
 sys.path.insert(0, str(_SRC))
 
-from tawasol_risk.config.settings import get_settings  # noqa: E402
-from tawasol_risk.rag.nist_oscal import download_nist_catalog, load_nist_chunks  # noqa: E402
-from tawasol_risk.rag.vector_store import build_local_index, upsert_pinecone  # noqa: E402
+from cyber_risk.config.settings import get_settings  # noqa: E402
+from cyber_risk.rag.nist_oscal import download_nist_catalog, load_nist_chunks  # noqa: E402
+from cyber_risk.rag.vector_store import build_local_index, upsert_pinecone  # noqa: E402
 
 
 def main() -> None:

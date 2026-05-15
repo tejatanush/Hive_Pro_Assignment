@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from tawasol_risk.datasets.schemas import AssetRow, BusinessServiceRow, ThreatIntelRow, VulnRow
-from tawasol_risk.risk_engine.kev_service import KevEntry
-from tawasol_risk.risk_engine.scoring import composite_risk_score
+from cyber_risk.datasets.schemas import AssetRow, BusinessServiceRow, ThreatIntelRow, VulnRow
+from cyber_risk.risk_engine.kev_service import KevEntry
+from cyber_risk.risk_engine.scoring import composite_risk_score
 
 
 def _v(**kwargs) -> VulnRow:

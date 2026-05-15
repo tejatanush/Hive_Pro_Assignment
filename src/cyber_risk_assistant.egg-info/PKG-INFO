@@ -1,3 +1,31 @@
+Metadata-Version: 2.4
+Name: cyber-risk-assistant
+Version: 1.0.0
+Summary: Production cyber risk prioritization API with NIST RAG and threat intelligence correlation
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.110
+Requires-Dist: uvicorn[standard]>=0.27
+Requires-Dist: streamlit>=1.32
+Requires-Dist: pandas>=2.2
+Requires-Dist: pydantic>=2.6
+Requires-Dist: pydantic-settings>=2.2
+Requires-Dist: httpx>=0.27
+Requires-Dist: python-dotenv>=1.0
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: langchain-core>=0.2
+Requires-Dist: langchain-community>=0.2
+Requires-Dist: langgraph>=0.2
+Requires-Dist: sentence-transformers>=2.6
+Requires-Dist: numpy>=1.26
+Provides-Extra: pinecone
+Requires-Dist: pinecone[grpc]>=5.0; extra == "pinecone"
+Provides-Extra: groq
+Requires-Dist: langchain-groq>=0.1; extra == "groq"
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: ruff>=0.4; extra == "dev"
+
 # Cyber Risk Assistant
 
 Production-oriented API and UI for **prioritised cyber risk analysis**: ingest organization-specific CSV packs, cross-check **CISA KEV**, correlate **threat intelligence**, rank top risks (beyond CVSS-only), and retrieve **NIST SP 800-53 Rev. 5** remediation text via embeddings.
@@ -117,17 +145,6 @@ curl -X POST http://127.0.0.1:8000/v1/risk-report
 ```powershell
 streamlit run web\app.py
 ```
-
-The repo includes `.streamlit/config.toml` with **file watching disabled**, so Streamlit does not traverse `transformers` and spam the console with optional `torchvision` / vision-model import errors on Windows.
-
-**API — limit number of risks**
-
-```powershell
-curl -X POST "http://127.0.0.1:8000/v1/risk-report?top_k=3"
-curl "http://127.0.0.1:8000/v1/risk-report.md?top_k=5"
-```
-
-(Query `top_k` is optional; omit it to use `configs/default.yaml` → `risk_engine.top_k`.)
 
 ---
 

@@ -1,29 +1,36 @@
 services:
   api:
-    build: .
+    build:
+      context: .
+      args:
+        BUILD_BOOTSTRAP: "1"
     ports:
       - "8000:8000"
-    volumes:
-      - ./data:/app/data:ro
-      - tawasol_processed:/app/data/processed
+    env_file:
+      - .env
     environment:
-      - TAWASOL_PROJECT_ROOT=/app
+      CYBER_RISK_PROJECT_ROOT: /app
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  streamlit:
+  web:
     image: python:3.11-slim
     working_dir: /app
     ports:
       - "8501:8501"
+    env_file:
+      - .env
+    environment:
+      CYBER_RISK_PROJECT_ROOT: /app
     volumes:
       - ./:/app
-      - tawasol_processed:/app/data/processed
-    environment:
-      - TAWASOL_PROJECT_ROOT=/app
     command: >
-      bash -lc "pip install -U pip &&
-      pip install -r requirements.txt &&
-      pip install -e . &&
-      streamlit run streamlit_app/app.py --server.address 0.0.0.0 --server.port 8501"
-
-volumes:
-  tawasol_processed:
+      bash -lc "pip install -q -r requirements.txt && pip install -q -e . &&
+      streamlit run web/app.py --server.address 0.0.0.0 --server.port 8501"
+    depends_on:
+      - api

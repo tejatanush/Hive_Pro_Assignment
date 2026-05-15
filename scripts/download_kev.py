@@ -7,8 +7,8 @@ _ROOT = Path(__file__).resolve().parents[1]
 _SRC = _ROOT / "src"
 sys.path.insert(0, str(_SRC))
 
-from tawasol_risk.config.settings import get_settings  # noqa: E402
-from tawasol_risk.risk_engine.kev_service import download_kev_catalog  # noqa: E402
+from cyber_risk.config.settings import get_settings  # noqa: E402
+from cyber_risk.risk_engine.kev_service import download_kev_catalog  # noqa: E402
 
 
 def main() -> None:
