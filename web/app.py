@@ -213,6 +213,12 @@ def main() -> None:
             type=["md"],
             key="upl_threat",
         )
+        n_csv = sum(1 for n in REQUIRED_CSV_FILENAMES if csv_files.get(n) is not None)
+        st.caption(
+            f"Required CSVs selected: **{n_csv} / {len(REQUIRED_CSV_FILENAMES)}**. "
+            "When this reads 5/5, uploads are complete — **503** from the API means the **Render** service "
+            "(e.g. KEV file on disk), not missing files here."
+        )
 
     if use_remote_backend:
         if use_bundled:

@@ -12,7 +12,7 @@ from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
-from cyber_risk.bootstrap import bootstrap_artifacts, readiness_status
+from cyber_risk.bootstrap import bootstrap_artifacts, ensure_kev_cache, readiness_status
 from cyber_risk.config.settings import Settings, get_settings
 from cyber_risk.datasets.uploads import validate_pack_directory
 from cyber_risk.graph.workflow import run_langgraph_analysis
@@ -33,10 +33,73 @@ def _infra_ready(settings: Settings) -> dict[str, Any]:
     return {**st, "infra_ready": infra_ok}
 
 
+def _ensure_infra_with_lazy_kev(settings: Settings) -> dict[str, Any]:
+    """
+    Prepare KEV file + vector backend before handling an uploaded pack.
+
+    Render/native Python builds often start with an empty ``data/processed/``. We:
+
+    1. Download KEV whenever the cache file is missing (not only when Pinecone is configured).
+    2. If still not ready and this host is upload-only (``IGNORE_DATA_PACK_READY``), run
+       ``bootstrap_artifacts`` once so Pinecone/local vectors + NIST cache can be restored.
+    """
+    core = _infra_ready(settings)
+    if core["infra_ready"]:
+        return core
+
+    if not core.get("kev_cache"):
+        logger.info("KEV cache missing — downloading CISA KEV catalog…")
+        try:
+            ensure_kev_cache(settings, force=False)
+        except Exception as e:
+            logger.exception("KEV catalog download failed")
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "message": "KEV catalog download failed (check outbound HTTPS to cisa.gov).",
+                    "error": str(e),
+                    "detail": core,
+                },
+            ) from e
+        core = _infra_ready(settings)
+
+    if core["infra_ready"]:
+        logger.info("Infra ready after KEV sync.")
+        return core
+
+    if settings.ignore_data_pack_for_ready_check:
+        logger.info(
+            "Infra still incomplete after KEV (%s) — running bootstrap_artifacts…",
+            {k: core.get(k) for k in ("kev_cache", "vector_index", "vector_backend")},
+        )
+        try:
+            bootstrap_artifacts(settings, force=False)
+        except Exception as e:
+            logger.exception("bootstrap_artifacts failed during upload warmup")
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "message": "Bootstrap failed (Pinecone keys, embeddings, or network).",
+                    "error": str(e),
+                    "detail": core,
+                },
+            ) from e
+        core = _infra_ready(settings)
+        if core["infra_ready"]:
+            logger.info("Infra ready after bootstrap.")
+
+    return core
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
     logging.getLogger().setLevel(settings.log_level.upper())
+    try:
+        ensure_kev_cache(settings, force=False)
+        logger.info("KEV cache OK at startup.")
+    except Exception as e:
+        logger.warning("Startup KEV prefetch failed (upload handler will retry): %s", e)
     if settings.auto_bootstrap:
         logger.info("AUTO_BOOTSTRAP enabled — syncing KEV / NIST cache and vector artifacts")
         bootstrap_artifacts(settings)
@@ -119,7 +182,7 @@ def create_app() -> FastAPI:
             description="Defaults to configs/default.yaml risk_engine.top_k",
         ),
     ) -> RiskReportResponse:
-        core = _infra_ready(settings)
+        core = _ensure_infra_with_lazy_kev(settings)
         if not core["infra_ready"]:
             raise HTTPException(
                 status_code=503,
